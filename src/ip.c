@@ -16,6 +16,7 @@ static int next_ip_id = 0;
 void ip_in(buf_t *buf, uint8_t *src_mac) {
     // TO-DO
     //step1
+    //printf("hajimionanbeiluduo\n,%c",*src_mac);
     if(!buf || !buf->data) return ;
     if(buf->len < sizeof(ip_hdr_t)) return ;
 
@@ -33,17 +34,19 @@ void ip_in(buf_t *buf, uint8_t *src_mac) {
     if(totlen > buf->len) return ;
 
     //step 3
-    uint16_t orig_checksum = ip->hdr_checksum16;
+    uint16_t orig_checksum = swap16(ip->hdr_checksum16);
     uint16_t saved_cksum = orig_checksum;
     ip->hdr_checksum16 = 0;
     uint16_t calc_checksum = checksum16((uint16_t *)ip, ip_header_len);
     ip->hdr_checksum16 = saved_cksum;
     if(calc_checksum ^ orig_checksum) {
+        //printf("woc checksum!!!\n");
         return ;
     }
 
     //step 4
     if(memcmp(ip->dst_ip,net_if_ip,NET_IP_LEN)!=0) {
+        //printf("ip differ???\n");
         return ;
     }
     //step 5
@@ -54,16 +57,19 @@ void ip_in(buf_t *buf, uint8_t *src_mac) {
     //step 6
     uint8_t ip_header_backup[60];
     if(ip_header_len > (int)sizeof(ip_header_backup)) {
+      //  printf("are you in here\n");
         return ;
     }
-    memcpy(ip_header_backup,buf->data,IP_HEADER_LEN);
+    memcpy(ip_header_backup,buf->data,ip_header_len);
 
     buf_remove_header(buf, ip_header_len);
-
+    printf("ok,now lets net in %c\n",ip->protocol);
     int ret = net_in(buf,ip->protocol,ip->src_ip);
+    //printf("finish netin %d\n",ret);
     if(ret<0) {
         if(buf_add_header(buf,ip_header_len)==0) {
             memcpy(buf->data,ip_header_backup,ip_header_len);
+            //printf("ok!lets unreachable!!!\n");
             icmp_unreachable(buf,ip->src_ip,ICMP_CODE_PROTOCOL_UNREACH);
         } else {
             return ;
