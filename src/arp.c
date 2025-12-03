@@ -131,6 +131,7 @@ void arp_resp(uint8_t *target_ip, uint8_t *target_mac) {
 void arp_in(buf_t *buf, uint8_t *src_mac) {
     // TO-DO
     // Step1: 检查数据长度
+    //printf("arp_in:recv arp\n");
     if (buf->len < sizeof(arp_pkt_t)) {
         return;  // 数据包不完整，丢弃
     }
@@ -201,7 +202,9 @@ void arp_in(buf_t *buf, uint8_t *src_mac) {
 void arp_out(buf_t *buf, uint8_t *ip) {
     // TO-DO
     uint8_t *mac = (uint8_t *)map_get(&arp_table, ip);
-
+    //printf("arp_out:ip %s\n",iptos(ip));
+    //if(mac!=NULL)
+    //printf("arp_out:get mac %s\n",mactos(mac));
     if (mac != NULL) {
         // Step2: 找到了 MAC 地址，直接发送数据包
         ethernet_out(buf, mac, NET_PROTOCOL_IP);
@@ -211,16 +214,19 @@ void arp_out(buf_t *buf, uint8_t *ip) {
         
         // 检查 arp_buf 中是否已经有针对该 IP 的缓存数据包
         // 使用 map_entry_valid 判断键值对是否存在且有效
-        if (map_entry_valid(&arp_buf, ip)) {
+        if (map_get(&arp_buf,ip)) {
             // 已经有包在等待该 IP 的 ARP 响应，不重复发送 ARP 请求
             // 直接返回，等待之前的 ARP 请求得到响应
+            //printf("arp_out:has sent\n");
             return;
         } else {
             // arp_buf 中没有包，说明这是第一次请求该 IP
             // 缓存数据包到 arp_buf
+
             map_set(&arp_buf, ip, buf);
             // 发送 ARP 请求
             arp_req(ip);
+            //printf("arp_out:first to send\n");
         }
     }
 }

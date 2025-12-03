@@ -117,7 +117,26 @@ static inline void tcp_close_connection(uint8_t remote_ip[NET_IP_LEN], uint16_t 
  */
 void tcp_out(tcp_conn_t *tcp_conn, buf_t *buf, uint16_t src_port, uint8_t *dst_ip, uint16_t dst_port, uint8_t flags) {
     /* =============================== TODO 1 BEGIN =============================== */
+    buf_add_header(buf,sizeof(tcp_hdr_t));
+    tcp_hdr_t *tcp_hdr = (tcp_hdr_t *)(buf->data);
+    if(!tcp_hdr) {
+        return ;
+    }
+    tcp_hdr->src_port16 = swap16(src_port);
+    tcp_hdr->dst_port16 = swap16(dst_port);
+    tcp_hdr->ack = swap32(tcp_conn->ack);
+    tcp_hdr->seq = swap32(tcp_conn->seq);
+    tcp_hdr->doff = (5<<4);
+    tcp_hdr->flags = flags;
 
+    tcp_hdr->win = swap16(TCP_MAX_WINDOW_SIZE);
+    tcp_hdr->uptr = 0;
+
+    tcp_hdr->checksum16 = 0;
+
+    tcp_hdr->checksum16 = transport_checksum(NET_PROTOCOL_TCP,buf,net_if_ip,dst_ip);
+
+    ip_out(buf,dst_ip,NET_PROTOCOL_TCP);
     /* =============================== TODO 1 END =============================== */
 }
 
@@ -130,8 +149,10 @@ void tcp_out(tcp_conn_t *tcp_conn, buf_t *buf, uint16_t src_port, uint8_t *dst_i
 void tcp_in(buf_t *buf, uint8_t *src_ip) {
     // 包检查：判断接收到的数据包长度是否小于 TCP 头部的长度
     // 如果小于，则说明数据包不完整，直接返回，不进行后续处理
-    if (buf->len < sizeof(tcp_hdr_t))
+    if (buf->len < sizeof(tcp_hdr_t)) {
+        printf("tcpin:buflen < tcphdrsize!\n");
         return;
+    }
 
     tcp_hdr_t *hdr = (tcp_hdr_t *)buf->data;
 
@@ -160,49 +181,77 @@ void tcp_in(buf_t *buf, uint8_t *src_ip) {
     /* Step1 ：根据接收包数据更新当前TCP连接内部状态，并填写回复报文的标志部分。 */
 
     uint8_t send_flags = 0;  // 回复报文的标志位字段
+    uint32_t recv_ack = swap32(hdr->ack);
+    uint32_t recv_seq = remote_seq;
+    uint32_t payload_len = 0;
 
+    printf("tcpin:recv_ack%u,recv_seq%u\n",recv_ack,recv_seq);
      // 根据当前 TCP 连接的状态进行不同的处理    
     switch (tcp_conn->state) {
         case TCP_STATE_LISTEN:
             // TODO: 仅在收到连接报文时（SYN报文）才做出处理，否则直接返回
-
+            if(!TCP_FLG_ISSET(recv_flags,TCP_FLG_SYN))
+                return ;
             // TODO: 初始化 TCP 连接上下文（tcp_conn结构体）的seq字段
-
+            //tcp_conn->seq = tcp_generate_initial_seq();
+            tcp_conn->seq = (uint32_t)1108428113;
             // TODO: 填写 TCP 连接上下文（tcp_conn结构体）的ack字段
-
+            tcp_conn->ack = recv_seq + 1;
             // TODO: 填写回复标志 send_flags
-
+            send_flags = TCP_FLG_SYN | TCP_FLG_ACK;
             // TODO: 进行状态转移
-
+            tcp_conn->state = TCP_STATE_SYN_RECEIVED;
             break;
 
         case TCP_STATE_SYN_RECEIVED:
             // TODO: 仅在收到确认报文时（ACK报文）才做出处理，否则直接返回
-
+            if(!TCP_FLG_ISSET(recv_flags,TCP_FLG_ACK)) 
+                return ;
             // TODO: 进行状态转移
+            if(recv_ack != tcp_conn->seq)
+                return ;
 
+            tcp_conn->state = TCP_STATE_ESTABLISHED;  
+            send_flags = 0;
             break;
 
         case TCP_STATE_ESTABLISHED:
             // 未收到顺序包，丢弃并发送重复 ACK
             if (remote_seq != tcp_conn->ack) {
+                printf("tcpin: no seq,should be %d but recv %d\n",tcp_conn->ack,recv_seq);
                 buf_init(&txbuf, 0);
                 tcp_out(tcp_conn, &txbuf, host_port, remote_ip, remote_port, TCP_FLG_ACK);
                 return;
             }
             // TODO: 计算接收到的数据长度，更新 ACK
-
+            if(buf->len > tcp_hdr_sz) {
+                payload_len = buf->len - tcp_hdr_sz;
+            } else {
+                payload_len = 0;
+            }
+            printf("payload len%d\n",payload_len);
             // TODO: 如果接收报文携带数据，则填写回复标志 send_flags 发送ACK
-
+            if(payload_len>0) {
+                tcp_conn->ack = tcp_conn->ack + payload_len;
+                send_flags |= TCP_FLG_ACK;
+            }
             // TODO: 如果收到 FIN 报文，则增加 send_flags 相应标志位，并且进行状态转移
-
+            if(TCP_FLG_ISSET(recv_flags,TCP_FLG_FIN)) {
+                tcp_conn->ack = tcp_conn->ack+1;
+                send_flags |= TCP_FLG_ACK;
+                tcp_conn->state = TCP_STATE_CLOSE_WAIT;
+            }
             break;
 
         case TCP_STATE_LAST_ACK:
             // TODO: 仅在收到确认报文时（ACK报文）才做出处理，否则直接返回
-
+            if(!TCP_FLG_ISSET(recv_flags,TCP_FLG_ACK)) 
+                return ;
             // TODO: 关闭 TCP 连接
-
+            if(recv_ack == tcp_conn->seq) {
+                tcp_close_connection(remote_ip,remote_port,host_port);
+            }
+            return ;
             break;
 
         default:
@@ -212,7 +261,11 @@ void tcp_in(buf_t *buf, uint8_t *src_ip) {
 
     /* Step2 ：如果接收报文携带数据，则将数据部分交付给上层应用 */
     // TODO
-
+    if(payload_len >0) {
+        tcp_handler_t* cb = map_get(&tcp_handler_table,&host_port);
+        buf_remove_header(buf,tcp_hdr_sz);
+        (*cb)(tcp_conn,(unsigned char *)buf->data,buf->len,remote_ip,remote_port);
+    }
 
     /* Step3 ：调用tcp_out()发送回复报文，更新TCP连接序列号。 */
     // 如果无需回复，则接收逻辑结束
@@ -226,9 +279,18 @@ void tcp_in(buf_t *buf, uint8_t *src_ip) {
     }
 
     // TODO:  初始化一个新的缓冲区，发送回复报文
+    buf_t txbuf;
+    buf_init(&txbuf,0);
 
+    printf("tcpin:send ack%d and seq%d\n",tcp_conn->ack,tcp_conn->seq);
+    tcp_out(tcp_conn,&txbuf,host_port,remote_ip,remote_port,send_flags);
     // TODO: 更新序列号
-
+    if(TCP_FLG_ISSET(send_flags,TCP_FLG_SYN)) {
+        tcp_conn->seq = tcp_conn->seq + 1;
+    }
+    if(TCP_FLG_ISSET(send_flags,TCP_FLG_FIN)) {
+        tcp_conn->seq = tcp_conn->seq + 1;
+    }
     /* =============================== TODO 2 END =============================== */
 }
 

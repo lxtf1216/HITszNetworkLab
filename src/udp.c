@@ -20,7 +20,7 @@ static inline uint16_t swap16_safe(uint16_t x) {
  */
 void udp_in(buf_t *buf, uint8_t *src_ip) {
     // TO-DO
-   // printf("ok,are we in udp?\n");
+    //printf("udpin:%s\n",iptos(src_ip));
     if(!buf || buf->len < sizeof(udp_hdr_t) ) return;
     udp_hdr_t *udph = (udp_hdr_t *)buf->data;
 
@@ -33,7 +33,9 @@ void udp_in(buf_t *buf, uint8_t *src_ip) {
 
     uint16_t old = udph->checksum16;
     udph->checksum16 = 0;
+    //printf("udpin:%s\n",iptos(src_ip));
     uint16_t cs = transport_checksum(NET_PROTOCOL_UDP,buf,src_ip,net_if_ip);
+    //printf("udpin:%s\n",iptos(src_ip));
     udph->checksum16 = old;
    // printf("udp:now check sum!old%04X cs%04X\n",old,cs);
     if(old!=0 && (old != cs)) return ;
@@ -68,7 +70,7 @@ void udp_out(buf_t *buf, uint16_t src_port, uint8_t *dst_ip, uint16_t dst_port) 
     // TO-DO
     if(!buf) return ;
     if(buf_add_header(buf,sizeof(udp_hdr_t))!=0) return ;
-    printf("wcc!!!!\n");
+    //printf("wcc!!!!\n");
     udp_hdr_t *udph = (udp_hdr_t *)buf->data;
     udph->src_port16 = swap16(src_port);
     udph->dst_port16 = swap16(dst_port);

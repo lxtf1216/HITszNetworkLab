@@ -13,7 +13,7 @@
 #else
 #define NET_IF_IP        \
     {                    \
-        10,249,66,214 \
+        10,249,66,101 \
     }  // 自定义网卡ip地址
 #define NET_IF_MAC                         \
     {                                      \

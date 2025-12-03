@@ -109,27 +109,15 @@ uint16_t transport_checksum(uint8_t protocol, buf_t *buf, uint8_t *src_ip, uint8
     const int PSEUDO_LEN = 12;
     buf_add_header(buf,PSEUDO_LEN);
 
-    const int IP_HD_LEN = 20;
-    uint8_t ip_saved[IP_HD_LEN];
+    uint8_t ip_saved[PSEUDO_LEN];
 
-    if(buf->len >= PSEUDO_LEN + IP_HD_LEN) {
-        memcpy(ip_saved,buf->data+PSEUDO_LEN,IP_HD_LEN);
-    } else {
-        int avail = buf->len - PSEUDO_LEN;
-        if(avail>0) {
-            memset(ip_saved,0,IP_HD_LEN);
-            memcpy(ip_saved,buf->data+PSEUDO_LEN,avail);
-        } else {
-            memset(ip_saved,0,IP_HD_LEN);
-        }
-    }
+    memcpy(ip_saved,buf->data,PSEUDO_LEN);
 
     uint8_t *p = buf->data;
     memcpy(p,src_ip,4);
     memcpy(p+4,dst_ip,4);
     p[8] = 0;
     p[9] = protocol;
-
     uint16_t udp_len = (uint16_t)(buf->len - PSEUDO_LEN);
 
     p[10] = (uint8_t)(udp_len>>8)&0xff;
@@ -140,15 +128,9 @@ uint16_t transport_checksum(uint8_t protocol, buf_t *buf, uint8_t *src_ip, uint8
 
     if(cs==0) 
         cs = 0xffff;
-    if (buf->len >= PSEUDO_LEN + IP_HD_LEN) {
-        memcpy(buf->data + PSEUDO_LEN, ip_saved, IP_HD_LEN);
-    } else {
-        int avail = buf->len - PSEUDO_LEN;
-        if (avail > 0)
-            memcpy(buf->data + PSEUDO_LEN, ip_saved, avail);
-    }
+    memcpy(buf->data,ip_saved,PSEUDO_LEN);
     
     buf_remove_header(buf,PSEUDO_LEN);
-    cs = swap16(cs); //为什么我加上这一行会发生段错误但是去掉了就不会？？？
+    cs = swap16(cs); 
     return cs;
 }

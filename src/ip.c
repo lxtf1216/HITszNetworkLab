@@ -51,7 +51,7 @@ void ip_in(buf_t *buf, uint8_t *src_mac) {
     }
     //step 5
     if(buf->len > totlen) {
-        buf_remove_padding(buf,totlen);
+        buf_remove_padding(buf,buf->len-totlen);
     }
 
     //step 6
@@ -63,7 +63,6 @@ void ip_in(buf_t *buf, uint8_t *src_mac) {
     memcpy(ip_header_backup,buf->data,ip_header_len);
 
     buf_remove_header(buf, ip_header_len);
-    printf("ok,now lets net in %c\n",ip->protocol);
     int ret = net_in(buf,ip->protocol,ip->src_ip);
     //printf("finish netin %d\n",ret);
     if(ret<0) {
