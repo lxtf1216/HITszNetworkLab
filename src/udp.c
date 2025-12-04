@@ -70,7 +70,6 @@ void udp_out(buf_t *buf, uint16_t src_port, uint8_t *dst_ip, uint16_t dst_port) 
     // TO-DO
     if(!buf) return ;
     if(buf_add_header(buf,sizeof(udp_hdr_t))!=0) return ;
-    //printf("wcc!!!!\n");
     udp_hdr_t *udph = (udp_hdr_t *)buf->data;
     udph->src_port16 = swap16(src_port);
     udph->dst_port16 = swap16(dst_port);

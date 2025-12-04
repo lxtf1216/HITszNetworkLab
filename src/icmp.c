@@ -11,7 +11,6 @@
  * @param src_ip 源ip地址
  */
 static void icmp_resp(buf_t *req_buf, uint8_t *src_ip) {
-    printf("hajimi\n");
     // TO-DO
     buf_t txbuf;
     int req_len = req_buf->len;
@@ -52,7 +51,6 @@ static void icmp_resp(buf_t *req_buf, uint8_t *src_ip) {
  * @param src_ip 源ip地址
  */
 void icmp_in(buf_t *buf, uint8_t *src_ip) {
-    printf("\nnow!!! icmp in!!!\n");
     // TO-DO
     if(buf->len < ICMP_HD_LEN) {
         return ;

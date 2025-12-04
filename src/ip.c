@@ -142,10 +142,9 @@ void ip_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol) {
         if(buf_init(&frag,payload_len)!=0) return ;
         if (payload_len) memcpy(frag.data, buf->data, payload_len);
         ip_fragment_out(&frag, ip, protocol, id, 0 /*offset*/, 0 /*mf*/);
-        //buf_free(&frag);
         return;
     } 
-    //printf("wcccccccccc%d\n",payload_len);
+
     uint32_t bytes_sent = 0;
     uint32_t bytes_remaining = payload_len;
 
@@ -160,13 +159,11 @@ void ip_out(buf_t *buf, uint8_t *ip, net_protocol_t protocol) {
             mf=0;
         }
         buf_t frag;
-        //printf("thislen!%d\n",this_len);
         if(buf_init(&frag,(uint16_t)this_len)!=0) {
             return ;
         }
         memcpy(frag.data,buf->data+bytes_sent,this_len);
         ip_fragment_out(&frag,ip,protocol,id,bytes_sent,mf);
-        //buf_free(&frag);
         bytes_sent += this_len;
         bytes_remaining -= this_len;
         //printf("now sent%d remain%d\n",bytes_sent,bytes_remaining);
